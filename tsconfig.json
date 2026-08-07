@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true
+  },
+  // Extension source only. The tests deliberately feed malformed records to the
+  // normalizers, and the icon script is Node-only — checking either here would
+  // mean adding @types/node just to argue with tests that are doing their job.
+  // Those are covered by `npm test`.
+  "include": ["src/**/*.js", "types/**/*.d.ts"]
+}

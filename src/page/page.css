@@ -1,0 +1,97 @@
+body.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 20px 64px;
+}
+
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  padding: 18px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+.page-header h1 { font-size: 18px; margin-bottom: 12px; }
+
+.tabs { display: flex; gap: 2px; }
+.tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  padding: 8px 12px;
+  font-weight: 500;
+}
+.tab:hover { color: var(--fg); background: var(--bg-sunken); }
+.tab.is-active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+
+.page-main { padding-top: 20px; }
+.section { display: flex; flex-direction: column; gap: 14px; }
+
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* ---- form ------------------------------------------------------------ */
+
+.form { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > label { font-weight: 600; font-size: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .04em; }
+
+.subform {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.subform legend { font-weight: 600; font-size: 12px; padding: 0 4px; }
+
+.inline { display: flex; align-items: center; gap: 7px; font-weight: 400; flex-wrap: wrap; }
+.inline input[type="checkbox"], .inline input[type="radio"] { flex: none; margin: 0; }
+/* Needs to outrank the base `input[type="date"] { width: 100% }` rule, which is
+   the more specific selector of the two. */
+input[type="date"].inline-date { width: auto; flex: none; }
+.indent { margin-left: 24px; font-size: 12px; color: var(--fg-muted); }
+
+.domain-row { display: flex; gap: 6px; align-items: center; }
+.domain-row input[type="text"] { flex: 1; }
+.domain-row select { width: auto; flex: none; }
+
+/* Deliberately not sticky: a pinned bar sits on top of the last fields, and
+   hiding a field the owner still has to fill is worse than one scroll. */
+.form-actions { padding: 6px 0 0; border-top: 1px solid var(--border); margin-top: 4px; }
+.error { color: var(--danger); margin: 0; font-weight: 500; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg-sunken);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+/* ---- vendors + panels ------------------------------------------------ */
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.panel h3 { font-size: 13px; }
+.panel p { margin: 0; }
+
+.vendor-card { align-items: stretch; }
+.vendor-card .vendor-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.vendor-card .vendor-head strong { font-size: 14px; }
+.vendor-count { font-size: 12px; color: var(--fg-muted); }
+
+.report-error { color: var(--danger); }
+.report-warning { color: var(--warn-fg); background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 6px; padding: 6px 8px; }
