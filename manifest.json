@@ -3,7 +3,14 @@
   "name": "Promo Tracker",
   "version": "1.0.0",
   "description": "Stores your promo codes and badges the tab when you are on a site you have one for.",
-  "permissions": ["storage", "tabs"],
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms"
+  ],
+  "optional_permissions": [
+    "downloads"
+  ],
   "background": {
     "service_worker": "src/background/service-worker.js",
     "type": "module"

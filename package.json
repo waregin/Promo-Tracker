@@ -8,6 +8,7 @@
     "test": "node --test \"test/*.test.js\"",
     "test:e2e": "node test/e2e/extension.e2e.mjs",
     "typecheck": "tsc --noEmit",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "test:e2e:backup": "node test/e2e/backup.e2e.mjs"
   }
 }

@@ -162,6 +162,58 @@
           <button type="button" id="do-export" class="primary">Export JSON</button>
         </div>
 
+        <div class="panel" id="auto-panel">
+          <h3>Automatic backup</h3>
+          <label class="inline">
+            <input type="checkbox" id="auto-enabled" />
+            Back up automatically when my codes change
+          </label>
+
+          <div id="auto-options" class="stack" hidden>
+            <label class="inline">
+              <input type="radio" name="destination" value="folder" />
+              A folder I choose
+            </label>
+            <div id="folder-block" class="indent stack">
+              <div class="row">
+                <button type="button" id="pick-folder" class="ghost">Choose folder…</button>
+                <span class="muted" id="folder-name">No folder chosen</span>
+              </div>
+              <p class="hint">
+                Anywhere on disk — including a Dropbox, Drive or network folder, which
+                gets the backup off this machine entirely. Needs no Chrome permission.
+              </p>
+            </div>
+
+            <label class="inline">
+              <input type="radio" name="destination" value="downloads" />
+              A subfolder of my Downloads folder
+            </label>
+            <div id="downloads-block" class="indent stack">
+              <div class="row">
+                <span class="muted">Downloads /</span>
+                <input type="text" id="auto-subfolder" class="mono" placeholder="promo-tracker" />
+              </div>
+              <p class="hint">
+                Asks for the “downloads” permission when you pick it. Chrome will not let an
+                extension write outside Downloads, so choose the folder option for anywhere else.
+              </p>
+            </div>
+
+            <p class="hint">
+              One file per day, named <code>promo-codes-YYYY-MM-DD.json</code>. Running again
+              the same day replaces that day's file; earlier days are never touched.
+            </p>
+          </div>
+
+          <p id="auto-status" class="muted"></p>
+          <p id="auto-error" class="error" hidden></p>
+          <div class="row">
+            <button type="button" id="backup-now">Back up now</button>
+            <button type="button" id="reconnect-folder" class="primary" hidden>Reconnect folder</button>
+          </div>
+        </div>
+
         <div class="panel">
           <h3>Import</h3>
           <p class="muted">Reads the same file an export produces.</p>

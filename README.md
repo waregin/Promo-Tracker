@@ -86,6 +86,37 @@ backup.**
 somewhere that is not this browser. The popup starts nagging once it has been
 more than 14 days.
 
+### Automatic backup
+
+Off until you turn it on, under **Backup → Automatic backup**. Once on, a
+backup is written whenever your codes change (coalesced, at most hourly) and on
+an hourly sweep, so a change made just before you closed the browser still gets
+saved. One file per day, `promo-codes-YYYY-MM-DD.json`; running again the same
+day replaces that day's file, and earlier days are never touched — so a bad
+save cannot destroy yesterday's good copy.
+
+Two destinations:
+
+**A folder you choose.** Anywhere on disk, including a Dropbox, Drive or network
+folder, which gets the copy off this machine entirely. Uses the File System
+Access API, so it needs **no Chrome permission at all** — you grant access to
+that one folder and nothing else. You pick it once and the background worker
+writes to it from then on.
+
+**A subfolder of Downloads.** Simpler and it never lapses, but Chrome will not
+let an extension write outside the Downloads folder: `chrome.downloads` rejects
+absolute paths, `~` and `..` outright. Choosing this asks for the `downloads`
+permission at that moment.
+
+If Chrome ever drops the folder grant — it can happen between sessions, and a
+background worker has no user gesture to re-request it with — backups stop, the
+panel says so with a **Reconnect folder** button, and the 14-day export nudge
+comes back. That failure is deliberately loud: a backup that has quietly
+stopped is worse than no backup.
+
+A successful automatic backup counts as an export, so it quiets the nudge on
+its own while it is working.
+
 Import reads the same file and asks whether to merge or replace:
 
 - **Merge** matches on record id and keeps whichever copy has the later
@@ -113,13 +144,20 @@ you already have: export, switch, import.
 
 ## Permissions
 
-Two, and no host permissions at all:
+Three, and no host permissions at all:
 
 - **`storage`** — to save your codes.
 - **`tabs`** — to read the current tab's URL. This one is not optional:
   `activeTab` only grants access after you click something, and the badge has to
   update *before* you click. Without `tabs`, `tab.url` comes back empty in
   `tabs.onUpdated`.
+- **`alarms`** — to schedule automatic backups. Shows no warning at install.
+
+One optional permission, requested only if you ask for it:
+
+- **`downloads`** — requested at the moment you choose the Downloads destination
+  for automatic backup. Never requested otherwise, so if you use the folder
+  destination (or no automatic backup at all) it is never granted.
 
 There is no `<all_urls>`, no content script, and nothing that can read or change
 a page. Hostname matching needs the URL, not the page. Checkout auto-fill is
@@ -145,7 +183,7 @@ all never matches anything, which is exactly what a no-website vendor wants.
 ## Development
 
 ```sh
-npm test          # 61 unit tests, no dependencies, no install needed
+npm test          # 83 unit tests, no dependencies, no install needed
 npm run typecheck # tsc --noEmit over src/ (JSDoc types, checkJs)
 npm run icons     # regenerate icons/*.png from scripts/make-icons.mjs
 ```
@@ -158,8 +196,17 @@ merge:
 ```sh
 npm install --no-save playwright
 npx playwright install chromium
-npm run test:e2e   # 53 checks
+npm run test:e2e         # 53 checks: matching, badge, entry, export/import
+npm run test:e2e:backup  # 25 checks: automatic backup, both destinations
 ```
+
+Two things the backup suite has to work around, both documented at the top of
+`test/e2e/backup.e2e.mjs`: `showDirectoryPicker()` and
+`chrome.permissions.request()` both open native dialogs that a headless browser
+cannot answer. So the folder path is driven with an OPFS directory handle
+stashed under the key the picker would use — every line after the pick is the
+real code — and the Downloads path runs against a fixture copy of the manifest
+with the permission pre-granted.
 
 ### Layout
 
@@ -170,9 +217,12 @@ src/lib/          pure logic, all unit-tested, no chrome.* at import time
   status.js         derived status (active / spent / expired / archived)
   format.js         display strings, including the four expiry states
   schema.js         document shape, defaults, validation, merge
+  backup.js         backup payload, content hashing, scheduling decisions
+  settings.js       automatic-backup settings, stored outside the document
+  handle-store.js   the backup folder handle, in IndexedDB
   store.js          document store over an injected storage area
   storage.js        the single storage-area accessor
-src/background/   service worker: badge painting
+src/background/   service worker: badge painting and automatic backup
 src/popup/        the popup
 src/page/         list, entry form, vendor management, backup
 src/ui/           shared DOM helpers, promo card, export/import, tab context
