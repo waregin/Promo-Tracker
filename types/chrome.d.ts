@@ -66,8 +66,51 @@ declare namespace chrome {
   namespace runtime {
     const id: string;
     function getURL(path: string): string;
+    function sendMessage(message: any): Promise<any>;
     const lastError: { message?: string } | undefined;
     const onInstalled: ChromeEvent<(details: { reason: string }) => void>;
     const onStartup: ChromeEvent<() => void>;
+    const onMessage: ChromeEvent<
+      (message: any, sender: any, sendResponse: (response?: any) => void) => boolean | undefined
+    >;
   }
+
+  namespace alarms {
+    function create(
+      name: string,
+      info: { when?: number; delayInMinutes?: number; periodInMinutes?: number },
+    ): Promise<void>;
+    function get(name: string): Promise<{ name: string; scheduledTime: number } | undefined>;
+    function clear(name: string): Promise<boolean>;
+    const onAlarm: ChromeEvent<(alarm: { name: string; scheduledTime: number }) => void>;
+  }
+
+  namespace permissions {
+    function contains(perms: { permissions?: string[]; origins?: string[] }): Promise<boolean>;
+    function request(perms: { permissions?: string[]; origins?: string[] }): Promise<boolean>;
+    function remove(perms: { permissions?: string[]; origins?: string[] }): Promise<boolean>;
+  }
+
+  namespace downloads {
+    function download(options: {
+      url: string;
+      filename?: string;
+      saveAs?: boolean;
+      conflictAction?: 'uniquify' | 'overwrite' | 'prompt';
+    }): Promise<number>;
+    function search(query: Record<string, any>): Promise<any[]>;
+  }
+}
+
+/**
+ * File System Access. Chrome ships these in extension pages and (for the
+ * handle/writable half) in service workers, but TypeScript's DOM lib does not
+ * declare showDirectoryPicker.
+ */
+interface Window {
+  showDirectoryPicker(options?: {
+    mode?: 'read' | 'readwrite';
+    id?: string;
+    startIn?: string;
+  }): Promise<any>;
 }

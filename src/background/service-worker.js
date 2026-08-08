@@ -7,6 +7,7 @@
  */
 
 import { store, STORAGE_AREA_NAME, STORAGE_KEY } from '../lib/storage.js';
+import { installBackupTriggers, installBackupMessaging, ensureAlarms } from './backup.js';
 import { hostnameFromUrl, findMatch } from '../lib/domains.js';
 import { countActiveForVendor } from '../lib/status.js';
 
@@ -105,3 +106,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 // Badges do not survive an extension reload or a browser restart.
 chrome.runtime.onInstalled.addListener(() => void repaintAll());
 chrome.runtime.onStartup.addListener(() => void repaintAll());
+
+// Automatic backups (spec §5: losing this data is the project's biggest risk).
+installBackupTriggers();
+installBackupMessaging();
+void ensureAlarms();

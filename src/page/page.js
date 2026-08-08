@@ -14,11 +14,17 @@ import { $, el, replaceChildren } from '../ui/dom.js';
 import { promoCard } from '../ui/promo-card.js';
 import { pageContextHost, isLikelyVendorHost, suggestPattern } from '../ui/tab-context.js';
 import { downloadExport, readImportFile, mergeDocuments } from '../ui/transfer.js';
+import { createSettingsStore } from '../lib/settings.js';
+import { saveDirectoryHandle, loadDirectoryHandle, directoryPermission } from '../lib/handle-store.js';
+import { normalizeSubfolder } from '../lib/backup.js';
 
 const SECTIONS = ['codes', 'add', 'vendors', 'data'];
 
+const settingsStore = createSettingsStore(chrome.storage[STORAGE_AREA_NAME]);
+
 const state = {
   /** @type {any} */ doc: { version: 1, exportedAt: null, vendors: [], promos: [] },
+  /** @type {any} */ settings: null,
   /** @type {string|null} */ contextHost: null,
   /** @type {string|null} */ editingPromoId: null,
   /** @type {any} */ pendingImport: null,
@@ -464,6 +470,138 @@ function renderData() {
     }`;
 }
 
+/* ---- automatic backup ------------------------------------------------ */
+
+async function renderAutoBackup() {
+  const settings = state.settings;
+  /** @type {HTMLInputElement} */ ($('#auto-enabled')).checked = settings.enabled;
+  $('#auto-options').hidden = !settings.enabled;
+
+  const radio = /** @type {HTMLInputElement} */ (
+    document.querySelector(`input[name="destination"][value="${settings.destination}"]`)
+  );
+  if (radio) radio.checked = true;
+  $('#folder-block').hidden = settings.destination !== 'folder';
+  $('#downloads-block').hidden = settings.destination !== 'downloads';
+  /** @type {HTMLInputElement} */ ($('#auto-subfolder')).value = settings.subfolder;
+
+  // The folder name lives in settings, but whether Chrome still honours the
+  // grant has to be asked of the handle itself.
+  let folderLabel = settings.folderName ? settings.folderName : 'No folder chosen';
+  if (settings.folderName) {
+    const handle = await loadDirectoryHandle();
+    const permission = handle ? await directoryPermission(handle) : 'denied';
+    if (permission !== 'granted') folderLabel = `${settings.folderName} — needs reconnecting`;
+  }
+  $('#folder-name').textContent = folderLabel;
+
+  const days = daysSince(settings.lastRunAt);
+  $('#auto-status').textContent = !settings.lastRunAt
+    ? 'Never run.'
+    : `Last backup ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}${settings.lastPath ? ` → ${settings.lastPath}` : ''}.`;
+
+  $('#auto-error').hidden = !settings.lastError;
+  $('#auto-error').textContent = settings.lastError ?? '';
+  $('#reconnect-folder').hidden = !(settings.needsPermission && settings.destination === 'folder');
+}
+
+/** Ask for a folder. Must run inside a click — the picker needs a gesture. */
+async function pickFolder() {
+  let handle;
+  try {
+    handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'promo-tracker-backup' });
+  } catch {
+    return; // the owner cancelled
+  }
+
+  const permission = await handle.requestPermission?.({ mode: 'readwrite' });
+  if (permission !== 'granted') {
+    await settingsStore.patch({ lastError: 'Write access to that folder was declined.' });
+    await refreshSettings();
+    return;
+  }
+
+  await saveDirectoryHandle(handle);
+  await settingsStore.patch({
+    folderName: handle.name,
+    destination: 'folder',
+    needsPermission: false,
+    lastError: null,
+  });
+  await refreshSettings();
+  await backupNow();
+}
+
+/** Re-grant a lapsed folder without making the owner pick it again. */
+async function reconnectFolder() {
+  const handle = await loadDirectoryHandle();
+  if (!handle) return pickFolder();
+  const permission = await handle.requestPermission?.({ mode: 'readwrite' });
+  if (permission !== 'granted') {
+    await settingsStore.patch({ lastError: 'Chrome still does not have access to that folder.' });
+    await refreshSettings();
+    return;
+  }
+  await settingsStore.patch({ needsPermission: false, lastError: null });
+  await refreshSettings();
+  await backupNow();
+}
+
+/** @param {boolean} enabled */
+async function setEnabled(enabled) {
+  if (!enabled) {
+    await settingsStore.patch({ enabled: false });
+    await refreshSettings();
+    return;
+  }
+  await settingsStore.patch({ enabled: true });
+  await refreshSettings();
+  if (state.settings.destination === 'folder' && !state.settings.folderName) {
+    await pickFolder();
+  } else {
+    await backupNow();
+  }
+}
+
+/** @param {'folder'|'downloads'} destination */
+async function setDestination(destination) {
+  if (destination === 'downloads') {
+    // Requested only now, so anyone who never turns this on keeps the
+    // two-permission install.
+    const granted = await chrome.permissions.request({ permissions: ['downloads'] });
+    if (!granted) {
+      await refreshSettings();
+      return;
+    }
+  }
+  await settingsStore.patch({ destination, lastError: null, needsPermission: false });
+  await refreshSettings();
+  if (destination === 'folder' && !state.settings.folderName) {
+    await pickFolder();
+  } else {
+    await backupNow();
+  }
+}
+
+async function backupNow() {
+  $('#auto-status').textContent = 'Backing up…';
+  /** @type {any} */
+  const result = await chrome.runtime.sendMessage({ type: 'promo-backup-now' }).catch((error) => ({
+    status: 'failed',
+    error: String(error?.message ?? error),
+  }));
+  await refreshSettings();
+  if (result?.status === 'written') $('#auto-status').textContent = `Backed up to ${result.path}.`;
+  else if (result?.status === 'failed') $('#auto-error').textContent = result.error ?? 'Backup failed.';
+}
+
+async function refreshSettings() {
+  state.settings = await settingsStore.read();
+  state.doc = await store.read();
+  renderData();
+  await renderAutoBackup();
+}
+
 /** @param {{errors: string[], warnings: string[], doc: any}|null} report */
 function renderImportReport(report) {
   const box = $('#import-report');
@@ -530,7 +668,7 @@ function go(section) {
 function renderActive() {
   if (state.section === 'codes') renderCodes();
   else if (state.section === 'vendors') renderVendors();
-  else if (state.section === 'data') renderData();
+  else if (state.section === 'data') { renderData(); void renderAutoBackup(); }
   else if (state.section === 'add') syncVendorField();
 }
 
@@ -588,6 +726,21 @@ async function main() {
     $('#export-state').textContent = `Exported to ${filename}.`;
   });
 
+  $('#auto-enabled').addEventListener('change', (event) =>
+    setEnabled(/** @type {HTMLInputElement} */ (event.target).checked));
+  for (const radio of document.querySelectorAll('input[name="destination"]')) {
+    radio.addEventListener('change', (event) =>
+      setDestination(/** @type {any} */ (event.target).value));
+  }
+  $('#pick-folder').addEventListener('click', pickFolder);
+  $('#reconnect-folder').addEventListener('click', reconnectFolder);
+  $('#backup-now').addEventListener('click', backupNow);
+  $('#auto-subfolder').addEventListener('change', async (event) => {
+    const value = normalizeSubfolder(/** @type {HTMLInputElement} */ (event.target).value);
+    await settingsStore.patch({ subfolder: value });
+    await refreshSettings();
+  });
+
   $('#import-file').addEventListener('change', handleImportFile);
   $('#cancel-import').addEventListener('click', clearImport);
   $('#do-merge').addEventListener('click', async () => {
@@ -614,6 +767,7 @@ async function main() {
     if (areaName === STORAGE_AREA_NAME && changes[STORAGE_KEY]) void refresh();
   });
 
+  state.settings = await settingsStore.read();
   resetForm();
   await refresh();
   go(window.location.hash.slice(1) || 'codes');
