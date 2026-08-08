@@ -77,7 +77,7 @@ check('typing an unknown vendor asks for a domain in the same flow', true);
 await page.fill('#domain-rows .domain-pattern', 'https://www.chewy.com/deals'); // pasted URL
 await page.fill('#f-code', 'SAVE20');
 await page.fill('#f-title', '20% off sitewide');
-await page.fill('#f-terms', 'One per customer.');
+await page.fill('#f-notes', 'One per customer.');
 await page.click('#form-submit');
 await page.waitForFunction(() => document.querySelector('#form-status')?.textContent === 'Saved.');
 
@@ -170,7 +170,7 @@ check('export is named promo-codes-YYYY-MM-DD.json', /^promo-codes-\d{4}-\d{2}-\
 const exportPath = join(downloads, filename);
 await download.saveAs(exportPath);
 const exported = JSON.parse(readFileSync(exportPath, 'utf8'));
-check('export carries the document version', exported.version === 1);
+check('export carries the document version', exported.version === 2);
 check('export stamps exportedAt', typeof exported.exportedAt === 'string');
 check('export carries every code', exported.promos.length === 2);
 check('export carries the vendor', exported.vendors.length === 1);
@@ -228,7 +228,49 @@ await onlyVendor.locator('.domain-pattern').first().fill('');
 await onlyVendor.locator('.domain-pattern').last().fill('');
 await onlyVendor.getByRole('button', { name: 'Save vendor' }).click();
 await page.waitForTimeout(300);
-check('a vendor cannot be left with no domains', /at least one domain/.test(await onlyVendor.textContent()));
+check('domains cannot be emptied by accident', /at least one domain/.test(await onlyVendor.textContent()));
+
+/* ---------------------------------------------------------------- *
+ * A vendor with no website at all
+ * ---------------------------------------------------------------- */
+
+await page.goto(`${pageUrl}#add`);
+await page.waitForSelector('#promo-form');
+await page.fill('#f-vendor', 'Local plumber');
+await page.waitForSelector('#new-vendor-block:not([hidden])');
+check('domain fields are shown by default', await page.locator('#website-fields').isVisible());
+
+await page.check('#f-no-website');
+check('ticking "no website" hides the domain fields', await page.locator('#website-fields').isHidden());
+
+await page.fill('#f-code', 'NEIGHBOUR10');
+await page.fill('#f-title', '10% off labour');
+await page.click('#form-submit');
+await page.waitForFunction(() => document.querySelector('#form-status')?.textContent === 'Saved.');
+
+const withPlumber = await page.evaluate(async () => (await chrome.storage.local.get('promoData')).promoData);
+const plumber = withPlumber.vendors.find((v) => v.name === 'Local plumber');
+check('a vendor with no website can be saved', Boolean(plumber));
+check('and is stored with no domains', plumber.domains.length === 0);
+check('its code is stored', withPlumber.promos.some((p) => p.code === 'NEIGHBOUR10'));
+
+// It must never badge anything, but must still be listed.
+await context.route(/^https?:\/\//, (route) =>
+  route.fulfill({ status: 200, contentType: 'text/html', body: 'ok' }),
+);
+check('a domainless vendor badges nothing', (await badgeFor('http://example.org/')) === '');
+await context.unrouteAll();
+
+await page.goto(`${pageUrl}#codes`);
+await page.waitForSelector('.card');
+check('its code still appears in the full list',
+  (await page.locator('.card', { hasText: 'NEIGHBOUR10' }).count()) === 1);
+
+await page.goto(`${pageUrl}#vendors`);
+await page.waitForSelector('.vendor-card');
+const plumberCard = page.locator('.vendor-card', { hasText: 'Local plumber' });
+check('vendor management flags that it never badges',
+  /never badges/.test(await plumberCard.textContent()));
 
 /* ---------------------------------------------------------------- *
  * Popup

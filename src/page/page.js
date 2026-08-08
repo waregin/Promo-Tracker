@@ -170,11 +170,11 @@ function syncVendorField() {
     const count = state.doc.promos.filter((p) => p.vendorId === existing.id).length;
     hint.textContent = patterns
       ? `Existing vendor · ${patterns} · ${count} code${count === 1 ? '' : 's'}`
-      : 'Existing vendor · no domains yet, so it will never badge a tab';
+      : `Existing vendor · no website · ${count} code${count === 1 ? '' : 's'}`;
     return;
   }
 
-  hint.textContent = 'New vendor — add at least one domain below.';
+  hint.textContent = 'New vendor — say where its codes work below.';
   if (block.hidden) {
     block.hidden = false;
     const rows = $('#domain-rows');
@@ -186,6 +186,17 @@ function syncVendorField() {
       addDomainRow(rows, prefill);
     }
   }
+}
+
+/**
+ * Some vendors have no website at all — a plumber, a handyman, anything booked
+ * by phone or done at the house. Those still deserve a record; they simply
+ * never badge a tab.
+ */
+function syncNoWebsite() {
+  const noWebsite = /** @type {HTMLInputElement} */ ($('#f-no-website')).checked;
+  $('#website-fields').hidden = noWebsite;
+  $('#no-website-hint').hidden = !noWebsite;
 }
 
 function syncExpiryControls() {
@@ -203,6 +214,7 @@ function resetForm() {
   replaceChildren($('#domain-rows'), []);
   $('#new-vendor-block').hidden = true;
   $('#vendor-hint').textContent = '';
+  syncNoWebsite();
   $('#form-heading').textContent = 'Add a code';
   $('#form-submit').textContent = 'Save code';
   $('#form-cancel').hidden = true;
@@ -221,7 +233,7 @@ function startEdit(promo) {
   /** @type {HTMLInputElement} */ ($('#f-code')).value = promo.code ?? '';
   /** @type {HTMLInputElement} */ ($('#f-landing')).value = promo.landingUrl ?? '';
   /** @type {HTMLInputElement} */ ($('#f-title')).value = promo.title ?? '';
-  /** @type {HTMLTextAreaElement} */ ($('#f-terms')).value = promo.terms ?? '';
+  /** @type {HTMLTextAreaElement} */ ($('#f-notes')).value = promo.notes ?? '';
   /** @type {HTMLInputElement} */ ($('#f-source')).value = promo.sourceNote ?? '';
   /** @type {HTMLInputElement} */ ($('#f-reusable')).checked = promo.reusable === true;
   /** @type {HTMLSelectElement} */ ($('#f-stackable')).value = promo.stackable ?? 'unknown';
@@ -264,9 +276,12 @@ async function submitForm(event) {
   let vendor = matchTypedVendor();
   let newVendorDomains = [];
   if (!vendor) {
-    newVendorDomains = readDomainRows($('#domain-rows'));
-    if (!newVendorDomains.length) {
-      return showFormError(`Add at least one domain for ${vendorName}, or the badge can never fire.`);
+    const noWebsite = /** @type {HTMLInputElement} */ ($('#f-no-website')).checked;
+    newVendorDomains = noWebsite ? [] : readDomainRows($('#domain-rows'));
+    if (!noWebsite && !newVendorDomains.length) {
+      return showFormError(
+        `Add at least one domain for ${vendorName}, or tick “No website” if there is nothing to match.`,
+      );
     }
   }
 
@@ -295,7 +310,7 @@ async function submitForm(event) {
     code: code || null,
     landingUrl: landingUrl || null,
     title: /** @type {HTMLInputElement} */ ($('#f-title')).value.trim(),
-    terms: /** @type {HTMLTextAreaElement} */ ($('#f-terms')).value.trim() || null,
+    notes: /** @type {HTMLTextAreaElement} */ ($('#f-notes')).value.trim() || null,
     expiresAt,
     expiryConfidence,
     reusable: /** @type {HTMLInputElement} */ ($('#f-reusable')).checked,
@@ -343,24 +358,43 @@ function vendorCard(vendor) {
     ? el('button', {
         type: 'button',
         class: 'ghost',
-        text: `Use ${state.contextHost}`,
+        text: `Use ${suggestPattern(state.contextHost)}`,
         onclick: () => fillFirstEmptyDomain(rows, suggestPattern(state.contextHost)),
       })
     : null;
 
   const status = el('span', { class: 'muted' });
 
-  return el('div', { class: 'panel vendor-card' }, [
-    el('div', { class: 'vendor-head' }, [
-      el('strong', { text: vendor.name }),
-      el('span', { class: 'vendor-count', text: `${count} code${count === 1 ? '' : 's'}` }),
-    ]),
-    el('div', { class: 'field' }, [el('label', { text: 'Name' }), nameInput]),
+  // A vendor with no domains is a deliberate state, not a broken record: the
+  // plumber has no website to match. Emptying the field by accident is not, so
+  // saving with no domains requires ticking this.
+  const noWebsite = /** @type {HTMLInputElement} */ (
+    el('input', { type: 'checkbox', checked: vendor.domains.length === 0 })
+  );
+  const websiteFields = el('div', { class: 'stack' }, [
     el('div', { class: 'field' }, [el('label', { text: 'Domains' }), rows]),
     el('div', { class: 'row' }, [
       el('button', { type: 'button', class: 'ghost', text: '+ Add domain', onclick: () => addDomainRow(rows) }),
       useCurrent,
     ]),
+  ]);
+  const syncWebsiteFields = () => {
+    websiteFields.hidden = noWebsite.checked;
+  };
+  noWebsite.addEventListener('change', syncWebsiteFields);
+  syncWebsiteFields();
+
+  return el('div', { class: 'panel vendor-card' }, [
+    el('div', { class: 'vendor-head' }, [
+      el('strong', { text: vendor.name }),
+      el('span', {
+        class: 'vendor-count',
+        text: `${count} code${count === 1 ? '' : 's'}${vendor.domains.length ? '' : ' · never badges'}`,
+      }),
+    ]),
+    el('div', { class: 'field' }, [el('label', { text: 'Name' }), nameInput]),
+    el('label', { class: 'inline' }, [noWebsite, 'No website — phone or in person only']),
+    websiteFields,
     el('div', { class: 'field' }, [el('label', { text: 'Notes' }), notesInput]),
     el('div', { class: 'row' }, [
       el('button', {
@@ -368,10 +402,13 @@ function vendorCard(vendor) {
         class: 'primary',
         text: 'Save vendor',
         onclick: async () => {
-          const domains = readDomainRows(rows);
           const name = nameInput.value.trim();
           if (!name) { status.textContent = 'Name cannot be empty.'; return; }
-          if (!domains.length) { status.textContent = 'Keep at least one domain, or this vendor can never match.'; return; }
+          const domains = noWebsite.checked ? [] : readDomainRows(rows);
+          if (!noWebsite.checked && !domains.length) {
+            status.textContent = 'Keep at least one domain, or tick “No website”.';
+            return;
+          }
           await store.updateVendor(vendor.id, { name, domains, notes: notesInput.value.trim() || null });
           await refresh();
         },
@@ -522,6 +559,7 @@ async function main() {
 
   $('#f-vendor').addEventListener('input', syncVendorField);
   $('#add-domain').addEventListener('click', () => addDomainRow($('#domain-rows')));
+  $('#f-no-website').addEventListener('change', syncNoWebsite);
   $('#promo-form').addEventListener('submit', submitForm);
   $('#form-cancel').addEventListener('click', () => { resetForm(); go('codes'); });
   for (const radio of document.querySelectorAll('input[name="expiry"]')) {

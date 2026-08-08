@@ -10,7 +10,7 @@
 import { newId } from './id.js';
 import { normalizeDomainPattern } from './domains.js';
 
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
 
 export const EXPIRY_CONFIDENCE = /** @type {const} */ (['explicit', 'inferred', 'none', 'unknown']);
 export const STACKABLE = /** @type {const} */ (['yes', 'no', 'unknown']);
@@ -111,7 +111,9 @@ export function makePromo(input = {}) {
     code: str(input.code),
     landingUrl: str(input.landingUrl),
     title: str(input.title) ?? '',
-    terms: str(input.terms),
+    // `terms` is the v1 name for this field; accepted here so a hand-edited or
+    // half-migrated record still keeps its text.
+    notes: str(input.notes ?? input.terms),
     expiresAt: normalizeDateOnly(input.expiresAt),
     expiryConfidence: oneOf(input.expiryConfidence, EXPIRY_CONFIDENCE, 'unknown'),
     reusable: input.reusable === true,
@@ -126,12 +128,30 @@ export function makePromo(input = {}) {
 }
 
 /**
- * Future-version documents are refused rather than mangled. Older versions get
- * migrated here as the schema grows; version 1 needs nothing yet.
+ * Bring an older document up to the current version. Future versions are
+ * refused rather than mangled — see normalizeDocument.
+ *
+ * v1 → v2: promo `terms` became `notes`. The field was always free text kept
+ * verbatim; "terms" implied legal small print, but it is really just a place to
+ * write down whatever matters about the offer.
  * @param {any} doc
  */
 function migrate(doc) {
-  return doc;
+  let next = doc;
+
+  if (Number(next.version) < 2) {
+    next = {
+      ...next,
+      version: 2,
+      promos: (Array.isArray(next.promos) ? next.promos : []).map((promo) => {
+        if (!promo || typeof promo !== 'object') return promo;
+        const { terms, ...rest } = promo;
+        return { ...rest, notes: rest.notes ?? terms ?? null };
+      }),
+    };
+  }
+
+  return next;
 }
 
 /**
@@ -171,9 +191,6 @@ export function normalizeDocument(raw) {
     if (vendorIds.has(vendor.id)) {
       warnings.push(`Duplicate vendor id ${vendor.id} — kept the first one.`);
       continue;
-    }
-    if (!vendor.domains.length) {
-      warnings.push(`Vendor "${vendor.name}" has no domains, so it will never match a tab.`);
     }
     vendorIds.add(vendor.id);
     vendors.push(vendor);

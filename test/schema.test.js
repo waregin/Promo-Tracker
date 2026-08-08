@@ -39,9 +39,9 @@ test('all four expiry confidence values survive a round trip', () => {
 });
 
 test('blank strings become null rather than empty text', () => {
-  const promo = makePromo({ code: '   ', terms: '', sourceNote: null });
+  const promo = makePromo({ code: '   ', notes: '', sourceNote: null });
   assert.equal(promo.code, null);
-  assert.equal(promo.terms, null);
+  assert.equal(promo.notes, null);
   assert.equal(promo.sourceNote, null);
 });
 
@@ -102,14 +102,53 @@ test('normalizeDocument fills defaults and reports orphans', () => {
   assert.match(result.warnings[0], /missing vendor/);
 });
 
-test('normalizeDocument warns about a vendor that can never match', () => {
+test('a vendor with no domains is a supported state, not a warning', () => {
+  // The plumber has no website. The record is still worth keeping; it simply
+  // never badges a tab.
   const result = normalizeDocument({
-    version: 1,
-    vendors: [{ id: 'v1', name: 'Nowhere', domains: [] }],
-    promos: [],
+    version: 2,
+    vendors: [{ id: 'v1', name: 'Local plumber', domains: [] }],
+    promos: [{ id: 'p1', vendorId: 'v1', code: 'NEIGHBOUR10' }],
   });
   assert.equal(result.ok, true);
-  assert.match(result.warnings[0], /no domains/);
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.doc.vendors[0].domains.length, 0);
+  assert.equal(result.doc.promos.length, 1);
+});
+
+test('v1 documents migrate: promo `terms` becomes `notes`', () => {
+  const result = normalizeDocument({
+    version: 1,
+    vendors: [{ id: 'v1', name: 'Chewy', domains: [{ pattern: 'chewy.com' }] }],
+    promos: [{ id: 'p1', vendorId: 'v1', code: 'A', terms: 'One per customer.' }],
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.doc.version, CURRENT_VERSION);
+  assert.equal(result.doc.promos[0].notes, 'One per customer.');
+  assert.equal('terms' in result.doc.promos[0], false);
+});
+
+test('migration never drops text a v1 record was carrying', () => {
+  const result = normalizeDocument({
+    version: 1,
+    vendors: [{ id: 'v1', name: 'V', domains: [{ pattern: 'v.com' }] }],
+    promos: [
+      { id: 'p1', vendorId: 'v1', code: 'A', terms: 'kept' },
+      { id: 'p2', vendorId: 'v1', code: 'B', terms: null },
+      { id: 'p3', vendorId: 'v1', code: 'C' },
+    ],
+  });
+  assert.deepEqual(result.doc.promos.map((p) => p.notes), ['kept', null, null]);
+});
+
+test('a v2 document passes through untouched', () => {
+  const result = normalizeDocument({
+    version: 2,
+    vendors: [{ id: 'v1', name: 'V', domains: [{ pattern: 'v.com' }] }],
+    promos: [{ id: 'p1', vendorId: 'v1', code: 'A', notes: 'already migrated' }],
+  });
+  assert.equal(result.doc.promos[0].notes, 'already migrated');
 });
 
 test('merge keeps the newer record on an id collision', () => {

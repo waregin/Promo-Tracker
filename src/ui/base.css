@@ -92,55 +92,66 @@ textarea { resize: vertical; min-height: 60px; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-raised);
-  padding: 10px;
+  padding: 7px 9px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
 }
 .card-spent, .card-expired, .card-archived { opacity: .62; }
 
-.card-header { display: flex; align-items: flex-start; gap: 8px; justify-content: space-between; }
-.card-heading { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+/* Every row wraps rather than overflowing: at popup width a long title and a
+   long expiry line will not both fit, and wrapping beats truncating a code. */
+.card-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
+}
+.headline { justify-content: space-between; }
+
+.description { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; min-width: 0; }
 .vendor-name { font-size: 11px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .05em; }
+.vendor-name::after { content: "·"; margin-left: 5px; }
 .promo-title { font-weight: 600; overflow-wrap: anywhere; }
 
+.meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12px; color: var(--fg-muted); }
+/* Plain text rather than bordered pills: the borders cost roughly 12px of
+   width each, which was enough to push the qualifiers onto their own line. */
+.tag { font-size: 12px; }
+.tag::before { content: "·"; margin-right: 6px; }
+.expiry-unknown { font-style: italic; }
+
 .chip {
-  flex: none;
   font-size: 11px;
-  padding: 1px 7px;
+  padding: 0 7px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   color: var(--fg-muted);
 }
 
-.code-row { display: flex; align-items: center; gap: 8px; }
+.code-row { align-items: center; gap: 4px 6px; }
 .code-text {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: .04em;
   background: var(--bg-sunken);
   border: 1px dashed var(--border-strong);
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 1px 6px;
   overflow-wrap: anywhere;
   user-select: all;
 }
-.code-row .copy { flex: none; }
+.code-row button { padding: 3px 8px; font-size: 12px; }
+.landing-link { font-size: 12px; }
 
-.terms {
+.notes {
   margin: 0;
   color: var(--fg-muted);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .source { margin: 0; font-size: 11px; color: var(--fg-muted); font-style: italic; }
-
-.meta { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: center; font-size: 12px; color: var(--fg-muted); }
-.tag { border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-size: 11px; }
-.expiry-unknown { font-style: italic; }
-
-.card-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 
 /* ---- shared blocks --------------------------------------------------- */
 
@@ -166,7 +177,7 @@ textarea { resize: vertical; min-height: 60px; }
 }
 .empty p { margin: 0 0 10px; }
 
-.stack { display: flex; flex-direction: column; gap: 8px; }
+.stack { display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .spacer { flex: 1; }
 .muted { color: var(--fg-muted); }

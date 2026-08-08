@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createStore, STORAGE_KEY } from '../src/lib/store.js';
+import { CURRENT_VERSION } from '../src/lib/schema.js';
 
 /** An in-memory stand-in for chrome.storage.local. */
 function fakeArea(initial = {}) {
@@ -22,7 +23,7 @@ function fakeArea(initial = {}) {
 test('an empty area reads as an empty document', async () => {
   const store = createStore(fakeArea());
   const doc = await store.read();
-  assert.equal(doc.version, 1);
+  assert.equal(doc.version, CURRENT_VERSION);
   assert.deepEqual(doc.vendors, []);
   assert.deepEqual(doc.promos, []);
   assert.equal(doc.exportedAt, null);
@@ -115,6 +116,33 @@ test('concurrent writes are serialized, not lost', async () => {
 
   const doc = await store.read();
   assert.equal(doc.promos.length, 10);
+});
+
+test('a v1 document in storage is migrated on read', async () => {
+  // What the owner's browser actually holds after upgrading the extension.
+  const store = createStore(fakeArea({
+    [STORAGE_KEY]: {
+      version: 1,
+      exportedAt: null,
+      vendors: [{ id: 'v1', name: 'Chewy', domains: [{ pattern: 'chewy.com' }] }],
+      promos: [{ id: 'p1', vendorId: 'v1', code: 'SAVE20', terms: 'One per customer.' }],
+    },
+  }));
+
+  const doc = await store.read();
+  assert.equal(doc.version, CURRENT_VERSION);
+  assert.equal(doc.promos[0].notes, 'One per customer.');
+  assert.equal(doc.promos[0].code, 'SAVE20');
+});
+
+test('a vendor with no domains round trips', async () => {
+  const store = createStore(fakeArea());
+  const vendor = await store.addVendor({ name: 'Local plumber', domains: [] });
+  await store.addPromo({ vendorId: vendor.id, code: 'NEIGHBOUR10', title: '10% off labour' });
+
+  const doc = await store.read();
+  assert.equal(doc.vendors[0].domains.length, 0);
+  assert.equal(doc.promos.length, 1);
 });
 
 test('recordExport stamps the document', async () => {

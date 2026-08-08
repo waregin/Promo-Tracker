@@ -1,6 +1,14 @@
 /**
  * The promo card, shared by the popup and the full page so the two can never
  * drift on how a code is presented.
+ *
+ * Laid out for vertical density: with a handful of codes the popup should not
+ * need scrolling, so everything that describes the offer sits on one line and
+ * everything that acts on it sits on the next.
+ *
+ *   Chewy · 20% off sitewide        Expires 12 Sep 2026 · Reusable
+ *   SAVE20  [Copy] [Mark used]                    [Edit] [Archive]
+ *   <notes, only when there are any>
  */
 
 import { el, flash } from './dom.js';
@@ -18,8 +26,8 @@ async function copy(text, button) {
   } catch {
     // Clipboard can be refused if the document lost focus. Select the code so
     // the owner can copy it by hand instead of being left with a dead button.
-    flash(button, 'Press ⌘/Ctrl+C');
-    const codeNode = button.parentElement?.querySelector('.code-text');
+    flash(button, '⌘/Ctrl+C');
+    const codeNode = button.closest('.code-row')?.querySelector('.code-text');
     if (codeNode) {
       const range = document.createRange();
       range.selectNodeContents(codeNode);
@@ -47,43 +55,16 @@ export function promoCard(promo, vendor, handlers = {}) {
   const status = derivePromoStatus(promo, now);
   const label = statusLabel(status);
 
-  const header = el('div', { class: 'card-header' }, [
-    el('div', { class: 'card-heading' }, [
-      handlers.showVendor && vendor
-        ? el('span', { class: 'vendor-name', text: vendor.name })
-        : null,
-      el('span', { class: 'promo-title', text: promo.title || 'Untitled offer' }),
-    ]),
-    label ? el('span', { class: `chip chip-${status}`, text: label }) : null,
+  /* --- line 1: what the offer is, and everything qualifying it ---------- */
+
+  const description = el('div', { class: 'description' }, [
+    handlers.showVendor && vendor
+      ? el('span', { class: 'vendor-name', text: vendor.name })
+      : null,
+    el('span', { class: 'promo-title', text: promo.title || 'Untitled offer' }),
   ]);
 
-  const codeRow = promo.code
-    ? el('div', { class: 'code-row' }, [
-        el('span', { class: 'code-text', text: promo.code }),
-        el('button', {
-          class: 'copy',
-          type: 'button',
-          text: 'Copy',
-          title: `Copy ${promo.code}`,
-          onclick: (/** @type {Event} */ event) =>
-            copy(promo.code, /** @type {HTMLElement} */ (event.currentTarget)),
-        }),
-      ])
-    : null;
-
-  const linkRow = promo.landingUrl
-    ? el('div', { class: 'link-row' }, [
-        el('a', {
-          class: 'landing-link',
-          href: promo.landingUrl,
-          target: '_blank',
-          rel: 'noreferrer noopener',
-          text: promo.code ? 'Open offer page' : 'Open offer link',
-        }),
-      ])
-    : null;
-
-  const meta = el('div', { class: 'meta' }, [
+  const qualifiers = el('div', { class: 'meta' }, [
     el('span', {
       class: `expiry expiry-${promo.expiryConfidence}`,
       text: formatExpiryLine(promo, now),
@@ -96,15 +77,23 @@ export function promoCard(promo, vendor, handlers = {}) {
     promo.reusable ? el('span', { class: 'tag', text: 'Reusable' }) : null,
     promo.stackable === 'yes' ? el('span', { class: 'tag', text: 'Stackable' }) : null,
     promo.stackable === 'no' ? el('span', { class: 'tag', text: 'Not stackable' }) : null,
-    (promo.useCount ?? 0) > 0
-      ? el('span', {
-          class: 'tag',
-          text: `Used ${promo.useCount}×`,
-        })
-      : null,
+    (promo.useCount ?? 0) > 0 ? el('span', { class: 'tag', text: `Used ${promo.useCount}×` }) : null,
+    label ? el('span', { class: `chip chip-${status}`, text: label }) : null,
   ]);
 
-  const actions = el('div', { class: 'card-actions' }, [
+  /* --- line 2: the code, and what you can do with it -------------------- */
+
+  const primaryActions = [
+    promo.code
+      ? el('button', {
+          class: 'copy',
+          type: 'button',
+          text: 'Copy',
+          title: `Copy ${promo.code}`,
+          onclick: (/** @type {Event} */ event) =>
+            copy(promo.code, /** @type {HTMLElement} */ (event.currentTarget)),
+        })
+      : null,
     handlers.onMarkUsed
       ? el('button', {
           class: 'ghost',
@@ -113,13 +102,11 @@ export function promoCard(promo, vendor, handlers = {}) {
           onclick: () => handlers.onMarkUsed?.(promo),
         })
       : null,
+  ].filter(Boolean);
+
+  const secondaryActions = [
     handlers.onUnmarkUsed && (promo.useCount ?? 0) > 0
-      ? el('button', {
-          class: 'ghost',
-          type: 'button',
-          text: 'Undo use',
-          onclick: () => handlers.onUnmarkUsed?.(promo),
-        })
+      ? el('button', { class: 'ghost', type: 'button', text: 'Undo use', onclick: () => handlers.onUnmarkUsed?.(promo) })
       : null,
     handlers.onEdit
       ? el('button', { class: 'ghost', type: 'button', text: 'Edit', onclick: () => handlers.onEdit?.(promo) })
@@ -132,15 +119,28 @@ export function promoCard(promo, vendor, handlers = {}) {
           onclick: () => handlers.onArchive?.(promo),
         })
       : null,
+  ].filter(Boolean);
+
+  const codeRow = el('div', { class: 'card-line code-row' }, [
+    promo.code ? el('span', { class: 'code-text', text: promo.code }) : null,
+    promo.landingUrl
+      ? el('a', {
+          class: 'landing-link',
+          href: promo.landingUrl,
+          target: '_blank',
+          rel: 'noreferrer noopener',
+          text: promo.code ? 'Offer page' : 'Open offer link',
+        })
+      : null,
+    ...primaryActions,
+    secondaryActions.length ? el('span', { class: 'spacer' }) : null,
+    ...secondaryActions,
   ]);
 
   return el('article', { class: `card card-${status}`, dataset: { promoId: promo.id } }, [
-    header,
-    codeRow,
-    linkRow,
-    promo.terms ? el('p', { class: 'terms', text: promo.terms }) : null,
-    meta,
+    el('div', { class: 'card-line headline' }, [description, qualifiers]),
+    codeRow.childElementCount ? codeRow : null,
+    promo.notes ? el('p', { class: 'notes', text: promo.notes }) : null,
     promo.sourceNote ? el('p', { class: 'source', text: promo.sourceNote }) : null,
-    actions.childElementCount ? actions : null,
   ]);
 }

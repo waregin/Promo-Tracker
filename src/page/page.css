@@ -49,6 +49,7 @@ body.page {
   gap: 8px;
 }
 .subform legend { font-weight: 600; font-size: 12px; padding: 0 4px; }
+#website-fields { display: flex; flex-direction: column; gap: 8px; }
 
 .inline { display: flex; align-items: center; gap: 7px; font-weight: 400; flex-wrap: wrap; }
 .inline input[type="checkbox"], .inline input[type="radio"] { flex: none; margin: 0; }

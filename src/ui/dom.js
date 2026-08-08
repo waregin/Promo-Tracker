@@ -2,7 +2,7 @@
  * Tiny DOM helpers.
  *
  * Everything user-entered goes in as a text node, never as innerHTML — promo
- * titles and terms are free text pasted out of marketing emails.
+ * titles and notes are free text pasted out of marketing emails.
  */
 
 /**

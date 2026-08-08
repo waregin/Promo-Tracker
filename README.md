@@ -44,6 +44,11 @@ leading `www.`, since patterns match subdomains and keeping `www.` would miss
 `checkout.…`). If you came from your inbox, it is left blank — saving
 `mail.google.com` as a vendor domain would badge your inbox forever.
 
+**Vendors with no website** — a plumber, an electrician, anything booked by
+phone or done at the house — are a supported case. Tick **No website** and the
+domain fields go away. Those codes never badge a tab, because there is no tab to
+badge; they live in the popup under "All my codes" like everything else.
+
 ### Expiry is recorded honestly
 
 Four states, and the difference between the middle two is the point:
@@ -57,6 +62,12 @@ Four states, and the difference between the middle two is the point:
 
 A missing expiry date is not a promise that the code lasts forever, and the UI
 never says it is.
+
+### Notes
+
+One free-text field per code, kept verbatim and never parsed. Use it for
+restrictions, who to ask for, whatever matters. (It was called "Terms" in
+version 1 of the document format; existing entries migrate automatically.)
 
 ### Reusable vs used
 
@@ -81,7 +92,13 @@ Import reads the same file and asks whether to merge or replace:
   `updatedAt`, so importing an old backup cannot roll back newer edits.
 - **Replace** discards everything not in the file. It asks first.
 
-A file from a newer document version is refused rather than half-read.
+A file from a newer document version is refused rather than half-read. Older
+ones are migrated on the way in: a v1 export still imports cleanly, with each
+promo's `terms` becoming `notes`.
+
+The document is currently **version 2**. The same migration runs against
+whatever is already in `chrome.storage`, so upgrading the extension needs no
+action from you.
 
 ### Where the data lives
 
@@ -122,12 +139,13 @@ Patterns are cleaned up on entry, so pasting `https://www.chewy.com/deals?x=1`,
 domains are converted to punycode so they match what the browser reports.
 
 If several patterns match, the most specific wins: longest pattern first, and
-`exactly` beats `and subdomains` at equal length.
+`exactly` beats `and subdomains` at equal length. A vendor with no patterns at
+all never matches anything, which is exactly what a no-website vendor wants.
 
 ## Development
 
 ```sh
-npm test          # 56 unit tests, no dependencies, no install needed
+npm test          # 61 unit tests, no dependencies, no install needed
 npm run typecheck # tsc --noEmit over src/ (JSDoc types, checkJs)
 npm run icons     # regenerate icons/*.png from scripts/make-icons.mjs
 ```
@@ -140,7 +158,7 @@ merge:
 ```sh
 npm install --no-save playwright
 npx playwright install chromium
-npm run test:e2e   # 45 checks
+npm run test:e2e   # 53 checks
 ```
 
 ### Layout

@@ -44,16 +44,26 @@
 
           <fieldset id="new-vendor-block" class="subform" hidden>
             <legend>New vendor — where do its codes work?</legend>
-            <div id="domain-rows" class="stack"></div>
-            <div class="row">
-              <button type="button" id="add-domain" class="ghost">+ Add another domain</button>
-              <span class="spacer"></span>
-              <button type="button" id="use-current-domain" class="ghost" hidden></button>
+            <label class="inline">
+              <input type="checkbox" id="f-no-website" />
+              No website — phone, in person, or someone coming to the house
+            </label>
+            <div id="website-fields">
+              <div id="domain-rows" class="stack"></div>
+              <div class="row">
+                <button type="button" id="add-domain" class="ghost">+ Add another domain</button>
+                <span class="spacer"></span>
+                <button type="button" id="use-current-domain" class="ghost" hidden></button>
+              </div>
+              <p class="hint">
+                Suffix matches subdomains too — <code>chewy.com</code> covers
+                <code>www.chewy.com</code> and <code>checkout.chewy.com</code>, but never
+                <code>notchewy.com</code>.
+              </p>
             </div>
-            <p class="hint">
-              Suffix matches subdomains too — <code>chewy.com</code> covers
-              <code>www.chewy.com</code> and <code>checkout.chewy.com</code>, but never
-              <code>notchewy.com</code>.
+            <p class="hint" id="no-website-hint" hidden>
+              This vendor will never badge a tab. Its codes still show in the popup
+              under “All my codes”.
             </p>
           </fieldset>
 
@@ -111,8 +121,8 @@
           </div>
 
           <div class="field">
-            <label for="f-terms">Terms</label>
-            <textarea id="f-terms" placeholder="Paste verbatim — this is never parsed."></textarea>
+            <label for="f-notes">Notes</label>
+            <textarea id="f-notes" placeholder="Restrictions, who to ask for, anything worth remembering."></textarea>
           </div>
 
           <div class="field">
