@@ -1,0 +1,13 @@
+{
+  "name": "promo-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension that stores hand-entered promo codes and badges tabs you have a code for.",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "test:e2e": "node test/e2e/extension.e2e.mjs",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/make-icons.mjs"
+  }
+}

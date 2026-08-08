@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Promo Tracker</title>
+    <link rel="stylesheet" href="../ui/base.css" />
+    <link rel="stylesheet" href="page.css" />
+  </head>
+  <body class="page">
+    <header class="page-header">
+      <h1>Promo Tracker</h1>
+      <nav class="tabs">
+        <button type="button" class="tab" data-section="codes">Codes</button>
+        <button type="button" class="tab" data-section="add">Add code</button>
+        <button type="button" class="tab" data-section="vendors">Vendors</button>
+        <button type="button" class="tab" data-section="data">Backup</button>
+      </nav>
+    </header>
+
+    <main class="page-main">
+      <!-- ---------------- Codes ---------------- -->
+      <section id="section-codes" class="section" hidden>
+        <div class="section-head">
+          <h2>All codes</h2>
+          <label class="inline">
+            <input type="checkbox" id="codes-show-inactive" />
+            Show used, expired and archived
+          </label>
+        </div>
+        <div id="codes-list" class="stack"></div>
+      </section>
+
+      <!-- ---------------- Add / edit ---------------- -->
+      <section id="section-add" class="section" hidden>
+        <h2 id="form-heading">Add a code</h2>
+
+        <form id="promo-form" class="form" autocomplete="off">
+          <div class="field">
+            <label for="f-vendor">Vendor</label>
+            <input type="text" id="f-vendor" list="vendor-names" placeholder="Chewy" required />
+            <datalist id="vendor-names"></datalist>
+            <p class="hint" id="vendor-hint"></p>
+          </div>
+
+          <fieldset id="new-vendor-block" class="subform" hidden>
+            <legend>New vendor — where do its codes work?</legend>
+            <label class="inline">
+              <input type="checkbox" id="f-no-website" />
+              No website — phone, in person, or someone coming to the house
+            </label>
+            <div id="website-fields">
+              <div id="domain-rows" class="stack"></div>
+              <div class="row">
+                <button type="button" id="add-domain" class="ghost">+ Add another domain</button>
+                <span class="spacer"></span>
+                <button type="button" id="use-current-domain" class="ghost" hidden></button>
+              </div>
+              <p class="hint">
+                Suffix matches subdomains too — <code>chewy.com</code> covers
+                <code>www.chewy.com</code> and <code>checkout.chewy.com</code>, but never
+                <code>notchewy.com</code>.
+              </p>
+            </div>
+            <p class="hint" id="no-website-hint" hidden>
+              This vendor will never badge a tab. Its codes still show in the popup
+              under “All my codes”.
+            </p>
+          </fieldset>
+
+          <div class="field">
+            <label for="f-code">Code</label>
+            <input type="text" id="f-code" class="mono" placeholder="SAVE20" />
+          </div>
+
+          <div class="field">
+            <label for="f-landing">Offer link</label>
+            <input type="url" id="f-landing" placeholder="https://…" />
+            <p class="hint">Needed only if there is no code — some offers are link-only.</p>
+          </div>
+
+          <div class="field">
+            <label for="f-title">What is it</label>
+            <input type="text" id="f-title" placeholder="20% off sitewide" />
+          </div>
+
+          <fieldset class="subform">
+            <legend>Expiry</legend>
+            <label class="inline">
+              <input type="radio" name="expiry" value="unknown" checked />
+              Nothing was said about expiry
+            </label>
+            <label class="inline">
+              <input type="radio" name="expiry" value="explicit" />
+              Expires on
+              <input type="date" id="f-expires" class="inline-date" />
+            </label>
+            <label class="inline indent" id="inferred-wrap" hidden>
+              <input type="checkbox" id="f-inferred" />
+              I worked that date out myself (the offer said something like “ends Sunday”)
+            </label>
+            <label class="inline">
+              <input type="radio" name="expiry" value="none" />
+              Never expires — the offer says so
+            </label>
+          </fieldset>
+
+          <div class="field">
+            <label class="inline">
+              <input type="checkbox" id="f-reusable" />
+              Reusable — works on every order, not just once
+            </label>
+          </div>
+
+          <div class="field">
+            <label for="f-stackable">Stacks with other offers</label>
+            <select id="f-stackable">
+              <option value="unknown" selected>Not stated</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="f-notes">Notes</label>
+            <textarea id="f-notes" placeholder="Restrictions, who to ask for, anything worth remembering."></textarea>
+          </div>
+
+          <div class="field">
+            <label for="f-source">Where it came from</label>
+            <input type="text" id="f-source" placeholder="Newsletter, 4 Aug" />
+          </div>
+
+          <p id="form-error" class="error" hidden></p>
+
+          <div class="row form-actions">
+            <button type="submit" class="primary" id="form-submit">Save code</button>
+            <button type="button" class="ghost" id="form-cancel" hidden>Cancel</button>
+            <span class="spacer"></span>
+            <span class="muted" id="form-status"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- ---------------- Vendors ---------------- -->
+      <section id="section-vendors" class="section" hidden>
+        <div class="section-head">
+          <h2>Vendors</h2>
+          <button type="button" id="new-vendor" class="ghost">+ New vendor</button>
+        </div>
+        <div id="vendors-list" class="stack"></div>
+      </section>
+
+      <!-- ---------------- Backup ---------------- -->
+      <section id="section-data" class="section" hidden>
+        <h2>Backup</h2>
+        <div class="panel">
+          <p>
+            Codes live in this browser profile only. Removing the extension deletes them,
+            so keep an export somewhere durable.
+          </p>
+          <p class="muted" id="export-state"></p>
+          <button type="button" id="do-export" class="primary">Export JSON</button>
+        </div>
+
+        <div class="panel">
+          <h3>Import</h3>
+          <p class="muted">Reads the same file an export produces.</p>
+          <input type="file" id="import-file" accept="application/json,.json" />
+          <div id="import-report" class="stack" hidden></div>
+          <div class="row" id="import-actions" hidden>
+            <button type="button" id="do-merge" class="primary">Merge into my codes</button>
+            <button type="button" id="do-replace" class="danger">Replace everything</button>
+            <button type="button" id="cancel-import" class="ghost">Cancel</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Where the data is</h3>
+          <p class="muted" id="storage-note"></p>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="page.js"></script>
+  </body>
+</html>

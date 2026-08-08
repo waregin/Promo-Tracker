@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Promo Tracker</title>
+    <link rel="stylesheet" href="../ui/base.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body class="popup">
+    <header class="popup-header">
+      <h1>Promo Tracker</h1>
+      <div class="row">
+        <button id="add" class="primary" type="button">Add code</button>
+        <button id="manage" class="ghost" type="button">Manage</button>
+      </div>
+    </header>
+
+    <main id="main" class="popup-main">
+      <p class="muted" id="loading">Loading…</p>
+
+      <div id="nudge" class="nudge" hidden>
+        <span id="nudge-text"></span>
+        <button id="nudge-export" class="ghost" type="button">Export now</button>
+      </div>
+
+      <section id="matched" hidden>
+        <h2 id="matched-title"></h2>
+        <div id="matched-list" class="stack"></div>
+      </section>
+
+      <section id="all" hidden>
+        <div class="section-head">
+          <h2 id="all-title">All codes</h2>
+          <button id="toggle-inactive" class="ghost" type="button">Show inactive</button>
+        </div>
+        <div id="all-list" class="stack"></div>
+      </section>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
