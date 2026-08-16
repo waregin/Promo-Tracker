@@ -3,6 +3,17 @@
   "name": "Promo Tracker",
   "version": "1.0.0",
   "description": "Stores your promo codes and badges the tab when you are on a site you have one for.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "promo-tracker@waregin",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
   "permissions": [
     "storage",
     "tabs",
@@ -12,7 +23,10 @@
     "downloads"
   ],
   "background": {
-    "service_worker": "src/background/service-worker.js",
+    "scripts": [
+      "src/background/main.js"
+    ],
+    "service_worker": "src/background/main.js",
     "type": "module"
   },
   "action": {
@@ -31,7 +45,10 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "options_page": "src/page/page.html",
+  "options_ui": {
+    "page": "src/page/page.html",
+    "open_in_tab": true
+  },
   "commands": {
     "_execute_action": {
       "suggested_key": {

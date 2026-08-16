@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Chrome extension that stores hand-entered promo codes and badges tabs you have a code for.",
+  "description": "Browser extension (Firefox/LibreWolf and Chrome) that stores hand-entered promo codes and badges tabs you have a code for.",
   "scripts": {
     "test": "node --test \"test/*.test.js\"",
     "test:e2e": "node test/e2e/extension.e2e.mjs",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/make-icons.mjs",
-    "test:e2e:backup": "node test/e2e/backup.e2e.mjs"
+    "test:e2e:backup": "node test/e2e/backup.e2e.mjs",
+    "package": "node scripts/package.mjs",
+    "lint:firefox": "web-ext lint --source-dir . --self-hosted"
   }
 }

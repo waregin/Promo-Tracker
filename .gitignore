@@ -3,3 +3,6 @@ node_modules/
 
 # Never commit a real export — it is personal data.
 promo-codes-*.json
+
+# Packaged extension
+dist/

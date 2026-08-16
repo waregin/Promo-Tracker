@@ -1,11 +1,16 @@
 /**
- * Badge painting (spec §4).
+ * The background entry point: badge painting (spec §4) and automatic backup.
  *
- * MV3 service workers are killed when idle, so nothing is cached in memory —
- * every event re-reads storage. At 7 codes that read is free, and it removes a
- * whole class of stale-state bugs.
+ * Loaded as an MV3 service worker on Chromium and as an event page on Firefox,
+ * which has no service workers in MV3 — the manifest declares both keys and
+ * each engine takes the one it understands. Nothing here may assume a DOM.
+ *
+ * Either way the background context is killed when idle, so nothing is cached
+ * in memory: every event re-reads storage. At this data size that read is free,
+ * and it removes a whole class of stale-state bugs.
  */
 
+import { api } from '../lib/api.js';
 import { store, STORAGE_AREA_NAME, STORAGE_KEY } from '../lib/storage.js';
 import { installBackupTriggers, installBackupMessaging, ensureAlarms } from './backup.js';
 import { hostnameFromUrl, findMatch } from '../lib/domains.js';
@@ -52,17 +57,17 @@ async function paint(tabId, url) {
   }
 
   try {
-    await chrome.action.setBadgeText({ tabId, text: count > 0 ? String(count) : '' });
-    await chrome.action.setTitle({
+    await api.action.setBadgeText({ tabId, text: count > 0 ? String(count) : '' });
+    await api.action.setTitle({
       tabId,
       title: count > 0
         ? `Promo Tracker — ${count} code${count === 1 ? '' : 's'} for ${vendorName}`
         : 'Promo Tracker',
     });
     if (count > 0) {
-      await chrome.action.setBadgeBackgroundColor({ tabId, color: BADGE_BACKGROUND });
+      await api.action.setBadgeBackgroundColor({ tabId, color: BADGE_BACKGROUND });
       // Not available on older Chrome; the default is readable anyway.
-      await chrome.action.setBadgeTextColor?.({ tabId, color: BADGE_TEXT_COLOR });
+      await api.action.setBadgeTextColor?.({ tabId, color: BADGE_TEXT_COLOR });
     }
   } catch {
     // Tab closed mid-flight. Nothing to do.
@@ -72,23 +77,23 @@ async function paint(tabId, url) {
 async function repaintAll() {
   let tabs = [];
   try {
-    tabs = await chrome.tabs.query({});
+    tabs = await api.tabs.query({});
   } catch {
     return;
   }
   await Promise.all(tabs.map((tab) => (tab.id === undefined ? null : paint(tab.id, tab.url))));
 }
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+api.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   // `url` covers same-document navigation; `status` covers the normal load.
   if (changeInfo.url === undefined && changeInfo.status === undefined) return;
   void paint(tabId, changeInfo.url ?? tab?.url);
 });
 
-chrome.tabs.onActivated.addListener(({ tabId }) => {
+api.tabs.onActivated.addListener(({ tabId }) => {
   void (async () => {
     try {
-      const tab = await chrome.tabs.get(tabId);
+      const tab = await api.tabs.get(tabId);
       await paint(tabId, tab?.url);
     } catch {
       /* tab vanished */
@@ -98,14 +103,14 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
 
 // Data changed in the popup or the full page — every open tab's count may be
 // stale now.
-chrome.storage.onChanged.addListener((changes, areaName) => {
+api.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== STORAGE_AREA_NAME || !changes[STORAGE_KEY]) return;
   void repaintAll();
 });
 
 // Badges do not survive an extension reload or a browser restart.
-chrome.runtime.onInstalled.addListener(() => void repaintAll());
-chrome.runtime.onStartup.addListener(() => void repaintAll());
+api.runtime.onInstalled.addListener(() => void repaintAll());
+api.runtime.onStartup.addListener(() => void repaintAll());
 
 // Automatic backups (spec §5: losing this data is the project's biggest risk).
 installBackupTriggers();

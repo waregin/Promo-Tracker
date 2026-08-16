@@ -1,11 +1,12 @@
 /**
  * Export and import (spec §5).
  *
- * The export is the only backup: chrome.storage.local dies with the extension.
- * Download uses an object URL rather than chrome.downloads so the extension
- * does not have to request the `downloads` permission.
+ * The export is the only backup: storage.local dies with the extension.
+ * Download uses an object URL rather than the downloads API, so a manual export
+ * never needs the `downloads` permission.
  */
 
+import { api } from '../lib/api.js';
 import { exportFilename } from '../lib/format.js';
 import { normalizeDocument, mergeDocuments, CURRENT_VERSION } from '../lib/schema.js';
 

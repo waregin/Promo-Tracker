@@ -6,6 +6,7 @@
  * URL and the page remembers it for the rest of the session.
  */
 
+import { api } from '../lib/api.js';
 import { hostnameFromUrl } from '../lib/domains.js';
 
 const SESSION_KEY = 'promoTrackerContextHost';
@@ -64,7 +65,7 @@ export function suggestPattern(host) {
 /** The active tab's hostname, or null on chrome:// pages and the new tab page. */
 export async function activeTabHost() {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
     return hostnameFromUrl(tab?.url);
   } catch {
     return null;
@@ -77,9 +78,9 @@ export async function activeTabHost() {
  * @param {string|null} [host]
  */
 export async function openPage(section = 'codes', host = null) {
-  const base = chrome.runtime.getURL('src/page/page.html');
+  const base = api.runtime.getURL('src/page/page.html');
   const query = host ? `?host=${encodeURIComponent(host)}` : '';
-  await chrome.tabs.create({ url: `${base}${query}#${section}` });
+  await api.tabs.create({ url: `${base}${query}#${section}` });
   window.close();
 }
 
@@ -108,5 +109,5 @@ export async function pageContextHost() {
 
   const active = await activeTabHost();
   // Ignore the extension's own page.
-  return active && !active.startsWith(chrome.runtime.id) ? active : null;
+  return active && !active.startsWith(api.runtime.id) ? active : null;
 }

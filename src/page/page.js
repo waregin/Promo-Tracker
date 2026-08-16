@@ -6,6 +6,7 @@
  * owner stop using this (spec §4: entry friction is the real risk).
  */
 
+import { api, supportsDirectoryPicker } from '../lib/api.js';
 import { store, STORAGE_AREA_NAME, STORAGE_KEY } from '../lib/storage.js';
 import { normalizeDomainPattern } from '../lib/domains.js';
 import { derivePromoStatus, isActive } from '../lib/status.js';
@@ -20,7 +21,7 @@ import { normalizeSubfolder } from '../lib/backup.js';
 
 const SECTIONS = ['codes', 'add', 'vendors', 'data'];
 
-const settingsStore = createSettingsStore(chrome.storage[STORAGE_AREA_NAME]);
+const settingsStore = createSettingsStore(api.storage[STORAGE_AREA_NAME]);
 
 const state = {
   /** @type {any} */ doc: { version: 1, exportedAt: null, vendors: [], promos: [] },
@@ -463,7 +464,7 @@ function renderData() {
       : `Last exported ${formatDate(state.doc.exportedAt)} (${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}).`;
 
   $('#storage-note').textContent =
-    `chrome.storage.${STORAGE_AREA_NAME}, key "${STORAGE_KEY}" — ${
+    `api.storage.${STORAGE_AREA_NAME}, key "${STORAGE_KEY}" — ${
       STORAGE_AREA_NAME === 'local'
         ? 'this machine only, and gone if the extension is removed.'
         : 'synced through your Google account, unencrypted at rest.'
@@ -474,15 +475,26 @@ function renderData() {
 
 async function renderAutoBackup() {
   const settings = state.settings;
+  const canPickFolder = supportsDirectoryPicker();
+
+  // Firefox has no File System Access API, so the folder destination cannot
+  // work there. Hide it rather than offering something that would fail.
+  $('#folder-choice').hidden = !canPickFolder;
+  $('#no-folder-note').hidden = canPickFolder;
+
   /** @type {HTMLInputElement} */ ($('#auto-enabled')).checked = settings.enabled;
   $('#auto-options').hidden = !settings.enabled;
 
   const radio = /** @type {HTMLInputElement} */ (
     document.querySelector(`input[name="destination"][value="${settings.destination}"]`)
   );
+  if (!canPickFolder) {
+    $('#folder-block').hidden = true;
+    $('#downloads-block').hidden = false;
+  }
   if (radio) radio.checked = true;
-  $('#folder-block').hidden = settings.destination !== 'folder';
-  $('#downloads-block').hidden = settings.destination !== 'downloads';
+  $('#folder-block').hidden = !canPickFolder || settings.destination !== 'folder';
+  $('#downloads-block').hidden = canPickFolder && settings.destination !== 'downloads';
   /** @type {HTMLInputElement} */ ($('#auto-subfolder')).value = settings.subfolder;
 
   // The folder name lives in settings, but whether Chrome still honours the
@@ -507,6 +519,14 @@ async function renderAutoBackup() {
 
 /** Ask for a folder. Must run inside a click — the picker needs a gesture. */
 async function pickFolder() {
+  if (!supportsDirectoryPicker()) {
+    await settingsStore.patch({
+      lastError: 'This browser cannot write to a chosen folder. Use a Downloads subfolder instead.',
+    });
+    await refreshSettings();
+    return;
+  }
+
   let handle;
   try {
     handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'promo-tracker-backup' });
@@ -554,6 +574,14 @@ async function setEnabled(enabled) {
     await refreshSettings();
     return;
   }
+  if (!supportsDirectoryPicker() && state.settings.destination === 'folder') {
+    // The only destination this engine can serve.
+    await settingsStore.patch({ enabled: true });
+    await refreshSettings();
+    await setDestination('downloads');
+    return;
+  }
+
   await settingsStore.patch({ enabled: true });
   await refreshSettings();
   if (state.settings.destination === 'folder' && !state.settings.folderName) {
@@ -568,7 +596,7 @@ async function setDestination(destination) {
   if (destination === 'downloads') {
     // Requested only now, so anyone who never turns this on keeps the
     // two-permission install.
-    const granted = await chrome.permissions.request({ permissions: ['downloads'] });
+    const granted = await api.permissions.request({ permissions: ['downloads'] });
     if (!granted) {
       await refreshSettings();
       return;
@@ -586,7 +614,7 @@ async function setDestination(destination) {
 async function backupNow() {
   $('#auto-status').textContent = 'Backing up…';
   /** @type {any} */
-  const result = await chrome.runtime.sendMessage({ type: 'promo-backup-now' }).catch((error) => ({
+  const result = await api.runtime.sendMessage({ type: 'promo-backup-now' }).catch((error) => ({
     status: 'failed',
     error: String(error?.message ?? error),
   }));
@@ -763,7 +791,7 @@ async function main() {
   });
 
   // The popup can change data while this page is open.
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  api.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === STORAGE_AREA_NAME && changes[STORAGE_KEY]) void refresh();
   });
 

@@ -223,6 +223,52 @@ const SEED = {
   await context.close();
 }
 
+/* ================================================================== *
+ * The Firefox shape of things, simulated
+ *
+ * No Firefox build is available in this environment, so the engine
+ * difference that matters — no File System Access API — is simulated by
+ * removing those globals in Chromium. It proves the branching, not Firefox
+ * itself; see the README for what still needs checking by hand there.
+ * ================================================================== */
+
+{
+  const { context, worker, id } = await launch(EXTENSION);
+  const page = await context.newPage();
+  // Strip the API before any extension script runs, as Firefox would.
+  await page.addInitScript(() => {
+    delete window.showDirectoryPicker;
+    delete window.FileSystemDirectoryHandle;
+  });
+  await page.goto(`chrome-extension://${id}/src/page/page.html#data`);
+  await page.waitForSelector('#auto-panel');
+  await page.evaluate(() => chrome.storage.local.set({
+    promoBackupSettings: {
+      enabled: true, destination: 'folder', subfolder: 'promo-tracker',
+      folderName: null, lastRunAt: null, lastHash: null,
+      lastPath: null, lastError: null, needsPermission: false,
+    },
+  }));
+  await page.reload();
+  await page.waitForSelector('#auto-panel');
+  await page.waitForTimeout(400);
+
+  check('without the picker, the folder option is hidden',
+    await page.locator('#folder-choice').isHidden());
+  check('and the reason is explained',
+    await page.locator('#no-folder-note').isVisible());
+  check('the Downloads subfolder field is shown instead',
+    await page.locator('#downloads-block').isVisible());
+
+  // And the background refuses a folder write with a message that says what to do.
+  await worker.evaluate(() => { delete globalThis.FileSystemDirectoryHandle; });
+  const refused = await page.evaluate(() => chrome.runtime.sendMessage({ type: 'promo-backup-now' }));
+  check('a folder write is refused with an actionable message',
+    refused?.status === 'failed' && /Downloads subfolder/.test(refused.error ?? ''), refused?.error);
+
+  await context.close();
+}
+
 console.log(`\n# ${count - failures.length}/${count} passed`);
 if (failures.length) {
   console.log(`# failed: ${failures.join(' | ')}`);
