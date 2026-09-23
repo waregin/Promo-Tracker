@@ -62,8 +62,8 @@ export async function contentHash(doc) {
 /**
  * `data:` URL for a JSON payload.
  *
- * A service worker has no `URL.createObjectURL`, so `chrome.downloads` has to
- * be handed a data URL. `btoa` only accepts latin-1, and promo text is full of
+ * Used where `URL.createObjectURL` is missing — a Chrome MV3 service worker has
+ * no such function. `btoa` only accepts latin-1, and promo text is full of
  * “smart quotes”, × and accented names, so the string is UTF-8 encoded first.
  * @param {string} text
  */
@@ -92,9 +92,9 @@ export function backupBasename(now = new Date()) {
 /**
  * Clean a Downloads-relative subfolder.
  *
- * chrome.downloads refuses absolute paths, `~` and anything containing `..`
- * (verified: it throws "Invalid filename"), so those are stripped here rather
- * than left to fail at write time.
+ * The downloads API refuses absolute paths, `~` and anything containing `..`
+ * (verified against Chromium: it throws "Invalid filename"), so those are
+ * stripped here rather than left to fail at write time.
  * @param {string} input
  * @returns {string} a safe relative path, or '' for "straight into Downloads"
  */

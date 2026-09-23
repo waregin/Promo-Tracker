@@ -170,10 +170,18 @@
           </label>
 
           <div id="auto-options" class="stack" hidden>
-            <label class="inline">
-              <input type="radio" name="destination" value="folder" />
-              A folder I choose
-            </label>
+            <div id="folder-choice">
+              <label class="inline">
+                <input type="radio" name="destination" value="folder" />
+                A folder I choose
+              </label>
+            </div>
+            <p class="hint" id="no-folder-note" hidden>
+              This browser has no File System Access API, so an extension cannot write
+              to an arbitrary folder. Backups go to a subfolder of your download folder;
+              change where that is in Settings → General → Downloads, or point a symlink
+              at it.
+            </p>
             <div id="folder-block" class="indent stack">
               <div class="row">
                 <button type="button" id="pick-folder" class="ghost">Choose folder…</button>

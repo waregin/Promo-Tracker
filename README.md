@@ -1,27 +1,73 @@
 # Promo Tracker
 
-A personal Chrome extension (Manifest V3) that stores hand-entered promo codes
+A personal browser extension (Manifest V3) that stores hand-entered promo codes
 and badges the toolbar icon when you are on a site you have a code for.
 
-No backend, no accounts, no network calls of any kind. Built to the spec in
-`docs/promo-tracker-spec-v2.md`.
+Runs on **LibreWolf and Firefox** and on **Chrome and Chromium**, from one
+codebase with no build step. No backend, no accounts, no network calls of any
+kind. Built to the spec in `docs/promo-tracker-spec-v2.md`.
 
 ---
 
-## Install
+## Installing on LibreWolf (or Firefox)
 
-1. `git clone` this repo somewhere permanent — Chrome loads the extension from
-   this directory every launch, so it cannot be a temp folder.
-2. Open `chrome://extensions`.
-3. Turn on **Developer mode** (top right).
-4. **Load unpacked** → pick the repo root (the folder with `manifest.json`).
+### Try it in one minute — temporary
 
-Pin the icon to the toolbar so you can see the badge. `Ctrl+Shift+Y`
-(`Cmd+Shift+Y` on a Mac) opens the popup; rebind it at
-`chrome://extensions/shortcuts`.
+1. `git clone` this repo.
+2. Open `about:debugging#/runtime/this-firefox`.
+3. **Load Temporary Add-on…** → pick `manifest.json` in the repo root.
 
-Updating is `git pull` then the reload arrow on `chrome://extensions`. There is
-no build step.
+Works immediately, but it is gone when you close the browser. Good for a first
+look; not how you want to keep it.
+
+### Keep it — permanent
+
+LibreWolf, unlike stock Firefox release builds, lets you install unsigned
+extensions:
+
+1. `npm run package` → produces `dist/promo-tracker-1.0.0.xpi`.
+2. Open `about:config`, accept the warning, search
+   `xpinstall.signatures.required`, and set it to **false**.
+3. Open `about:addons` → the gear icon → **Install Add-on From File…** → pick
+   the `.xpi`.
+
+If step 2 has no effect on your build — the pref only works where signature
+enforcement was compiled out — the alternative is to get the same file signed
+for free:
+
+1. Sign in at [addons.mozilla.org](https://addons.mozilla.org/developers/), →
+   **Submit a New Add-on** → **On your own** (self-distribution, so it is never
+   listed publicly or reviewed for the store).
+2. Upload the `.xpi`; you get a signed one back, usually within minutes.
+3. Install the signed file the same way, with no `about:config` change.
+
+Either way: pin the icon to the toolbar so you can see the badge.
+`Ctrl+Shift+Y` opens the popup; rebind it at `about:addons` → gear → **Manage
+Extension Shortcuts**.
+
+To update: `git pull`, `npm run package`, install the new `.xpi` over the old
+one. (With a temporary install it is just `git pull` then **Reload** in
+`about:debugging`.)
+
+### Moving your codes over from Chrome
+
+The two builds share one data format, and neither talks to the other, so move
+the data by hand — once:
+
+1. In Chrome: **Backup → Export JSON**.
+2. In LibreWolf: **Backup → Import**, choose the file, then **Replace
+   everything**.
+
+Do this before you uninstall the Chrome copy; removing it deletes its storage.
+
+## Installing on Chrome or Chromium
+
+1. `chrome://extensions` → turn on **Developer mode**.
+2. **Load unpacked** → pick the repo root.
+
+Updating is `git pull` then the reload arrow. The same `manifest.json` serves
+both engines: it declares a background `service_worker` for Chromium and
+background `scripts` for Firefox, and each ignores the other's key.
 
 ## Using it
 
@@ -97,16 +143,28 @@ save cannot destroy yesterday's good copy.
 
 Two destinations:
 
-**A folder you choose.** Anywhere on disk, including a Dropbox, Drive or network
-folder, which gets the copy off this machine entirely. Uses the File System
-Access API, so it needs **no Chrome permission at all** — you grant access to
-that one folder and nothing else. You pick it once and the background worker
-writes to it from then on.
+**A folder you choose — Chromium only.** Anywhere on disk, including a Dropbox,
+Drive or network folder, which gets the copy off this machine entirely. Uses the
+File System Access API, so it needs **no browser permission at all** — you grant
+access to that one folder and nothing else.
 
-**A subfolder of Downloads.** Simpler and it never lapses, but Chrome will not
-let an extension write outside the Downloads folder: `chrome.downloads` rejects
-absolute paths, `~` and `..` outright. Choosing this asks for the `downloads`
-permission at that moment.
+**Firefox and LibreWolf have no File System Access API**, and no equivalent: the
+origin-private file system they do have lives inside the browser profile, which
+is exactly where a backup must not be. So on LibreWolf this option is hidden
+rather than offered and silently broken, and the destination is:
+
+**A subfolder of your download folder.** The only option on Firefox, and the
+sturdier one everywhere — it never lapses. The catch is that no extension may
+write outside that folder: the downloads API rejects absolute paths, `~` and
+`..` outright. To put backups somewhere else on LibreWolf, either change the
+download folder in **Settings → General → Downloads**, or point a symlink at the
+subfolder:
+
+```sh
+ln -s ~/Documents/PromoBackups ~/Downloads/promo-tracker
+```
+
+Choosing this destination asks for the `downloads` permission at that moment.
 
 If Chrome ever drops the folder grant — it can happen between sessions, and a
 background worker has no user gesture to re-request it with — backups stop, the
@@ -144,7 +202,7 @@ you already have: export, switch, import.
 
 ## Permissions
 
-Three, and no host permissions at all:
+Three, and no host permissions at all — identical on both engines:
 
 - **`storage`** — to save your codes.
 - **`tabs`** — to read the current tab's URL. This one is not optional:
@@ -183,10 +241,16 @@ all never matches anything, which is exactly what a no-website vendor wants.
 ## Development
 
 ```sh
-npm test          # 83 unit tests, no dependencies, no install needed
+npm test          # 88 unit tests, no dependencies, no install needed
 npm run typecheck # tsc --noEmit over src/ (JSDoc types, checkJs)
+npm run package   # build dist/promo-tracker-<version>.xpi
 npm run icons     # regenerate icons/*.png from scripts/make-icons.mjs
+
+npx --yes web-ext lint --source-dir . --self-hosted   # Mozilla's own linter
 ```
+
+`web-ext lint` reports **0 errors**. Its one warning — that Firefox ignores
+`background.service_worker` — is the dual-engine manifest working as intended.
 
 `npm test` needs nothing but Node. The end-to-end suite drives a real Chromium
 with the extension loaded and checks the things only a browser can prove —
@@ -197,8 +261,28 @@ merge:
 npm install --no-save playwright
 npx playwright install chromium
 npm run test:e2e         # 53 checks: matching, badge, entry, export/import
-npm run test:e2e:backup  # 25 checks: automatic backup, both destinations
+npm run test:e2e:backup  # 29 checks: automatic backup, both destinations
 ```
+
+### What is not covered
+
+**The end-to-end suites run on Chromium only.** No Firefox build was available
+where this was developed, so nothing here has been executed on a Gecko engine.
+The shared logic is the same code on both — the 88 unit tests and the 82
+Chromium checks exercise all of it — and the manifest passes Mozilla's linter,
+but that is not the same as having run.
+
+The one engine difference that changes behaviour, the missing File System Access
+API, is covered by deleting those globals in Chromium and asserting the
+branching (`test/e2e/backup.e2e.mjs`, final block). That proves the branch, not
+Gecko.
+
+So on a first LibreWolf install, check by hand:
+
+1. The toolbar badge shows a count on a vendor site and nothing on a lookalike.
+2. Adding a code and copying one both work.
+3. Automatic backup writes a file where you expect.
+4. `about:debugging` → **Inspect** on the extension → Console is clean.
 
 Two things the backup suite has to work around, both documented at the top of
 `test/e2e/backup.e2e.mjs`: `showDirectoryPicker()` and
@@ -212,7 +296,8 @@ with the permission pre-granted.
 
 ```
 manifest.json
-src/lib/          pure logic, all unit-tested, no chrome.* at import time
+src/lib/          pure logic, all unit-tested, no browser API at import time
+  api.js            the browser/chrome shim and engine capability checks
   domains.js        hostname ↔ pattern matching
   status.js         derived status (active / spent / expired / archived)
   format.js         display strings, including the four expiry states
@@ -222,16 +307,25 @@ src/lib/          pure logic, all unit-tested, no chrome.* at import time
   handle-store.js   the backup folder handle, in IndexedDB
   store.js          document store over an injected storage area
   storage.js        the single storage-area accessor
-src/background/   service worker: badge painting and automatic backup
+src/background/   main.js — service worker on Chromium, event page on Firefox
 src/popup/        the popup
 src/page/         list, entry form, vendor management, backup
 src/ui/           shared DOM helpers, promo card, export/import, tab context
 test/             unit tests; test/e2e/ needs Playwright
 ```
 
-The service worker holds no state in memory. MV3 kills it when idle, so every
-event re-reads storage — at this data size that read is free, and it removes a
-whole class of stale-state bugs.
+The background context holds no state in memory. Both engines kill it when idle,
+so every event re-reads storage — at this data size that read is free, and it
+removes a whole class of stale-state bugs.
+
+Every browser call goes through `api` from `src/lib/api.js`, which prefers
+`browser` (promise-based, Firefox) over `chrome` (promise-based on Chromium;
+Firefox also defines it, but callback-style). Engine differences are
+feature-detected, never sniffed — with one distinction worth knowing:
+`supportsDirectoryPicker()` answers "can I show a folder picker here", which is
+false in *any* background context, while `supportsFolderWrites()` answers "can I
+write through a handle someone already picked", which is true in a Chromium
+service worker. Confusing the two silently breaks folder backups.
 
 ## Scope
 

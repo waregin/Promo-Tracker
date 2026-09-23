@@ -2,7 +2,7 @@
  * Persistence for the backup folder handle.
  *
  * A `FileSystemDirectoryHandle` is structured-cloneable but not JSON, so it
- * cannot live in chrome.storage — IndexedDB is the only place it can go. Both
+ * cannot live in extension storage — IndexedDB is the only place it can go. Both
  * the page (which picks the folder) and the service worker (which writes to it)
  * can reach IndexedDB, which is what lets backups run in the background.
  */

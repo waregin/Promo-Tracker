@@ -1,29 +1,33 @@
 /**
  * The automatic backup runner.
  *
- * Runs in the service worker so backups happen whether or not any extension
- * page is open. Two destinations:
+ * Runs in the background (a service worker on Chrome, an event page on
+ * Firefox) so backups happen whether or not any extension page is open.
+ * Two destinations:
  *
  *   'folder'    — a directory the owner picked, written through a
  *                 FileSystemDirectoryHandle kept in IndexedDB. Anywhere on
- *                 disk, including a Dropbox/Drive/NAS folder. Needs no Chrome
- *                 permission at all.
- *   'downloads' — a subfolder of Downloads via chrome.downloads. Simple and
- *                 never lapses, but chrome.downloads rejects absolute paths and
- *                 `..`, so it genuinely cannot write anywhere else.
+ *                 disk, including a Dropbox/Drive/NAS folder. Needs no browser
+ *                 permission at all. Chromium only — Firefox has no File System
+ *                 Access API, so this destination is hidden there.
+ *   'downloads' — a subfolder of the browser's download folder. Simple, never
+ *                 lapses, and the only option on Firefox — but the downloads
+ *                 API rejects absolute paths and `..`, so it genuinely cannot
+ *                 write anywhere else.
  */
 
+import { api } from '../lib/api.js';
 import { store, STORAGE_AREA_NAME, STORAGE_KEY } from '../lib/storage.js';
 import { createSettingsStore } from '../lib/settings.js';
 import { loadDirectoryHandle, directoryPermission } from '../lib/handle-store.js';
 import {
   buildExportDocument,
   contentHash,
-  toJsonDataUrl,
   backupBasename,
   normalizeSubfolder,
   shouldBackUp,
 } from '../lib/backup.js';
+import { downloadableUrl, supportsFolderWrites } from '../lib/api.js';
 
 export const SWEEP_ALARM = 'promo-backup-sweep';
 export const DEBOUNCE_ALARM = 'promo-backup-debounce';
@@ -33,7 +37,7 @@ const SWEEP_PERIOD_MINUTES = 60;
 // three. MV3 clamps alarm delays to 30 seconds minimum.
 const DEBOUNCE_MINUTES = 1;
 
-const settingsStore = createSettingsStore(chrome.storage[STORAGE_AREA_NAME]);
+const settingsStore = createSettingsStore(api.storage[STORAGE_AREA_NAME]);
 export { settingsStore };
 
 /** An error carrying whether a click could fix it. */
@@ -52,6 +56,16 @@ class BackupError extends Error {
  * @returns {Promise<string>} a path to show in the UI
  */
 async function writeToFolder(payload, basename) {
+  // Note: NOT supportsDirectoryPicker() — the picker is page-only and is always
+  // absent here. What matters is whether handles work at all.
+  if (!supportsFolderWrites()) {
+    // Firefox has no File System Access API. Reaching here means settings
+    // carried over from a Chromium profile, so say what to do about it.
+    throw new BackupError(
+      'This browser cannot write to a chosen folder. Switch the destination to a Downloads subfolder.',
+    );
+  }
+
   const dir = await loadDirectoryHandle();
   if (!dir) {
     throw new BackupError('No backup folder chosen yet.', { needsPermission: true });
@@ -59,10 +73,10 @@ async function writeToFolder(payload, basename) {
 
   const permission = await directoryPermission(dir);
   if (permission !== 'granted') {
-    // requestPermission() needs a user gesture, which a service worker woken by
-    // an alarm does not have. Surfacing it is the only honest option — the page
-    // shows a Reconnect button and the popup's backup nudge comes back.
-    throw new BackupError('Chrome needs you to re-approve the backup folder.', {
+    // requestPermission() needs a user gesture, which a background context woken
+    // by an alarm does not have. Surfacing it is the only honest option — the
+    // page shows a Reconnect button and the popup's backup nudge comes back.
+    throw new BackupError('The browser needs you to re-approve the backup folder.', {
       needsPermission: true,
     });
   }
@@ -85,21 +99,27 @@ async function writeToFolder(payload, basename) {
  * @returns {Promise<string>}
  */
 async function writeToDownloads(payload, basename, subfolder) {
-  const granted = await chrome.permissions.contains({ permissions: ['downloads'] });
+  const granted = await api.permissions.contains({ permissions: ['downloads'] });
   if (!granted) {
     throw new BackupError('The downloads permission was turned off.', { needsPermission: true });
   }
 
   const folder = normalizeSubfolder(subfolder);
   const filename = folder ? `${folder}/${basename}` : basename;
-  await chrome.downloads.download({
-    url: toJsonDataUrl(payload),
-    filename,
-    // One file per day: re-running today replaces today's file and leaves
-    // every earlier day alone.
-    conflictAction: 'overwrite',
-    saveAs: false,
-  });
+  const { url, revoke } = downloadableUrl(payload);
+  try {
+    await api.downloads.download({
+      url,
+      filename,
+      // One file per day: re-running today replaces today's file and leaves
+      // every earlier day alone.
+      conflictAction: 'overwrite',
+      saveAs: false,
+    });
+  } finally {
+    // Revoking immediately can cancel a download that has only just started.
+    setTimeout(revoke, 30_000);
+  }
   return `Downloads/${filename}`;
 }
 
@@ -160,9 +180,9 @@ export async function runBackup(options = {}) {
  * loaded — the backup would never fire while the owner was actually browsing.
  */
 export async function ensureAlarms() {
-  const existing = await chrome.alarms.get(SWEEP_ALARM);
+  const existing = await api.alarms.get(SWEEP_ALARM);
   if (existing) return;
-  await chrome.alarms.create(SWEEP_ALARM, {
+  await api.alarms.create(SWEEP_ALARM, {
     periodInMinutes: SWEEP_PERIOD_MINUTES,
     delayInMinutes: 1,
   });
@@ -170,27 +190,27 @@ export async function ensureAlarms() {
 
 /** Coalesce a burst of edits into one backup. */
 export function scheduleDebounced() {
-  chrome.alarms.create(DEBOUNCE_ALARM, { delayInMinutes: DEBOUNCE_MINUTES });
+  api.alarms.create(DEBOUNCE_ALARM, { delayInMinutes: DEBOUNCE_MINUTES });
 }
 
-/** Wire up the alarm and data-change triggers. Called once at worker start. */
+/** Wire up the alarm and data-change triggers. Called once at background start. */
 export function installBackupTriggers() {
-  chrome.alarms.onAlarm.addListener((alarm) => {
+  api.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== SWEEP_ALARM && alarm.name !== DEBOUNCE_ALARM) return;
     void runBackup();
   });
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  api.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== STORAGE_AREA_NAME || !changes[STORAGE_KEY]) return;
     scheduleDebounced();
   });
 
   // A browser that was closed when a change landed still gets a backup.
-  chrome.runtime.onStartup.addListener(() => {
+  api.runtime.onStartup.addListener(() => {
     void ensureAlarms();
     void runBackup();
   });
-  chrome.runtime.onInstalled.addListener(() => {
+  api.runtime.onInstalled.addListener(() => {
     void ensureAlarms();
     void runBackup();
   });
@@ -198,7 +218,7 @@ export function installBackupTriggers() {
 
 /** Let the page ask for an immediate backup and hear how it went. */
 export function installBackupMessaging() {
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'promo-backup-now') return undefined;
     runBackup({ force: true }).then(sendResponse);
     return true; // keep the channel open for the async reply
